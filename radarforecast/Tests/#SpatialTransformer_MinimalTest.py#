@@ -1,0 +1,207 @@
+## -------------------------------------------------------
+##
+## Example spatial transformer
+##
+## See: Jaderberg, M., Simonyan, K., Zisserman, A., and Kavukcuoglu,
+## K. (2015) Spatial Transformer Networks. arXiv:1506.02025
+##
+## January 26, 2016 -- Andreas Scheidegger
+## andreas.scheidegger@eawag.ch
+## -------------------------------------------------------
+
+
+import numpy as np
+
+from chainer import Variable, Chain, cuda, optimizers
+import chainer.functions as F
+import chainer.links as L
+import chainer
+
+import os
+import sys
+sys.path.append("{}/Dropbox/Projects/Nowcasting/Chainer/Modules".format(os.environ['HOME']))
+import generators as g              # data generators
+import SpatialTransformer as st
+reload(st)
+
+import matplotlib.image
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+import time
+
+gpuID = -1           # -1 = CPU, 0 = GPU
+if gpuID>=0:
+    print(cuda.get_device(gpuID))
+    cuda.get_device(gpuID).use()
+
+# -----------
+# --- create data
+
+data_in = np.random.random((30, 50)).astype("float32")
+data_in[15:22, 20:33] = 3.0
+data_in[8:10, 5:10] = 4.0
+data_in[[10, 20],:] = 2
+data_in[:,[10, 20, 30, 40]] = 2
+
+
+data_in = matplotlib.image.imread('fish.jpg')[:,:,1]
+data_in = data_in/(data_in.max()*0.25)
+data_in = data_in.astype("float32")
+
+
+U = Variable(data_in.astype("float32"))
+
+# sampling grid
+dimout = data_in.shape
+G_target = st.thin_plates(dimout, (3,2))
+# transform parameter
+# A = Variable(np.asarray([[1, 0, 0], [-0.2, 0.8, 0]]).astype("float32"))
+A = Variable(np.asarray([[1.2, 0, 0, 0.1, 0, 0, 0.4, 0, 0],
+                         [0, 0.9, 0, 0.2, 0, 0, 0.2, 0.1, 0]]).astype("float32"))
+
+
+
+if gpuID>=0:
+    U.to_gpu()
+   # G_target = cuda.cupy.array(G_target)
+    A.to_gpu()
+
+G = st.transform_grid(A, G_target)
+
+dd = st.interpolate(U, G)
+
+# dd.to_cpu()
+# data_out = np.reshape(dd.data, dimout)
+# print(np.sum(data_out))
+
+
+# # -----------
+# # Test 1
+
+# xp = cuda.get_array_module(dd.data)
+# dd.grad = xp.ones_like(dd.data, dtype=xp.float32)
+# dd.backward(retain_grad=True)
+
+# print(U.grad)
+
+# U.to_cpu()
+# dd.to_cpu()
+# V = np.reshape(dd.data, dimout)
+# gV = np.reshape(dd.grad, dimout)
+
+
+# fig, axes = plt.subplots(nrows=1, ncols=3)
+# fig.tight_layout()
+# axes[0].imshow(U.data, interpolation="none", cmap="cubehelix_r", vmin=0, vmax=5)
+# axes[0].set_title("U")
+
+# axes[1].imshow(V, interpolation="none", cmap="cubehelix_r", vmin=0, vmax=5)
+# axes[1].set_title("V")
+# im = axes[2].imshow(U.grad, interpolation="none", cmap="cubehelix_r")
+# axes[2].set_title("U grad")
+
+# plt.colorbar(im)
+# fig.show()
+
+
+
+# -----------
+# Test 2
+
+dd.to_cpu()
+data_out = np.reshape(dd.data, dimout)
+
+# --- model to learn the transformation matrix
+class TransMat(chainer.Link):
+    """
+    This link holds the transformation matrix as parameter.
+    However, typically the transformation matrix would be
+    provided by an localization network.
+    """
+    def __init__(self, polynomial=None, thin_plate=False, dim_control_points=(3,3)):
+
+        if not thin_plate:
+            d = 3 if polynomial==None else (polynomial+1)**2
+        else:
+            d = np.prod(dim_control_points)+3
+        super(TransMat, self).__init__(
+            A=(2, d),
+        )
+        self.A.data[...] = np.zeros((2,d)).astype("float32")
+        self.A.data[0,0] = 1.0
+        self.A.data[1,1] = 1.0
+
+    def __call__(self):
+        return self.A
+
+
+
+class Testmodel(Chain):
+    def __init__(self, dimout):
+        self.dimout = dimout
+        super(Testmodel, self).__init__(
+            A = TransMat(thin_plate=True, dim_control_points=(3,2)),
+            # G_target = st.LearnableTargetGrid(dimout, thin_plate=True, dim_control_points=(3,2))
+        )
+        self.G_target = st.thin_plates(dimout, dim_control_points=(3,2)) # constant target grid
+
+    def transform(self, data_in, train=False):
+        G_sampling = st.transform_grid(self.A(), self.G_target)
+        xpred = st.interpolate(F.reshape(data_in, self.dimout), G_sampling)
+        return F.reshape(xpred, (1,)+self.dimout)
+
+    def loss(self, data_in, data_out):
+        data_trans = self.transform(data_in, train=False)
+        return F.mean_squared_error(data_trans, data_out)
+
+
+model = Testmodel(dimout)
+optimizer = optimizers.MomentumSGD(lr=0.005, momentum=0.9)
+# optimizer = optimizers.SGD(lr=1)
+# optimizer = optimizers.RMSprop(lr=0.001, alpha=0.99, eps=1e-08)
+optimizer = optimizers.Adam()
+optimizer.setup(model)
+
+data_in_var = Variable(data_in[np.newaxis,:])
+data_out_var = Variable(data_out[np.newaxis])
+
+if gpuID>=0:
+    model.to_gpu()
+    data_in_var.to_gpu()
+    data_out_var.to_gpu()
+
+with PdfPages("test.pdf") as pdf:
+
+    cmap = "gray"               # "cubehelix_r"
+    t1 = time.time()
+    for epoch in range(10):
+        print('epoch %d' % epoch)
+        # plot
+        if epoch % 5 == 0:
+            fig, axes = plt.subplots(nrows=2, ncols=2)
+            fig.tight_layout()
+            axes[0,0].imshow(data_in, interpolation="none", cmap=cmap, vmin=0, vmax=5)
+            axes[0,0].set_title("input")
+            axes[0,1].imshow(data_out, interpolation="none", cmap=cmap, vmin=0, vmax=5)
+            axes[0,1].set_title("label")
+            pred = model.transform(data_in_var).data
+            pred = cuda.to_cpu(pred)
+            axes[1,1].imshow(pred[0,:], interpolation="none", cmap=cmap, vmin=0, vmax=5)
+            axes[1,1].set_title("Epochs: {}".format(epoch))
+            if epoch > 0:
+                axes[1,0].imshow(cuda.to_cpu(data_in_var.grad)[0,:], interpolation="none", cmap=cmap)
+                axes[1,0].set_title("gU")
+
+            pdf.savefig()
+            plt.close()
+        # update
+        model.zerograds()
+        loss = model.loss(data_in_var, data_out_var)
+        print("loss: {}".format(loss.data))
+        loss.backward(retain_grad=True)
+        optimizer.update()
+        t2 = time.time()
+
+print("Estimated transformation matrix:\n {}".format(model.A.A.data))
+print("Time: {} sec".format(np.round(t2-t1,2)))

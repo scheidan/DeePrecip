@@ -1,0 +1,25 @@
+# files to be ignored by git
+
+# folder
+
+deeprecip.egg-info/
+venv-radar/
+*/__pycache__/
+
+# julia
+.juliahistory
+
+
+# R
+.Rhistory
+.Rdata
+*.Rout
+
+# misc
+*.csv
+.DS_Store
+*.doc
+*.docx
+
+.dropbox*
+desktop.ini
