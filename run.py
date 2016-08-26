@@ -29,8 +29,8 @@ import dataimport as g              # data generators
 
 
 load_model = True
-train = True
-plot = True
+train = False
+plot = False
 
 gpuID = 0         # -1 = CPU, 0 = GPU
 
@@ -321,15 +321,34 @@ if plot:
 # test online prediction with updating
 
 
-X = next(g.batch_sequence_multi_hdf5(test_files, 2))
+X = xp.asarray(next(g.batch_sequence_multi_hdf5(test_files, 10)), dtype=np.float32)
+print(X.shape)
+X2 = X[:, np.newaxis, np.newaxis]
+print(X2.shape)
 
 # update parameters
 online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
-online_optimizer = optimizers.RMSprop(lr=0.00001, alpha=0.99, eps=1e-08)
+# online_optimizer = optimizers.RMSprop(lr=0.00001, alpha=0.99, eps=1e-08)
 
 x_last = X[0,:]
 x_new = X[1,:]
-pp = model.predict_n_steps_updating(state, x_last, x_new, 6, online_optimizer)
+
+# takes (1,1,220, 360) should take (220, 360)
+pp0 = model.predict_n_steps(state, x_last[xp.newaxis, xp.newaxis, :,:], 6)
+print(pp0.shape)
+
+# takes  (220, 360),  (220, 360)
+pp1 = model.predict_n_steps_updating(state, x_last, x_new, 6, online_optimizer)
+print(pp1.shape)
+
+# takes (N, 1, 1, 220, 360) better take (N, 220, 360)
+pp2 = model.predict_n_steps_series(state, X2, 6)
+print(pp2.shape)
+
+# takes (N, 1, 1, 220, 360) better take (N, 220, 360)
+pp3 = model.predict_n_steps_series_updating(state, X2, 6, online_optimizer)
+print(pp3.shape)
+
 
 
 # # compute loss for next time step
