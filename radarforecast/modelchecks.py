@@ -1,5 +1,5 @@
 #
-# Run basic test for LSTM
+# Check if the model produces valid predictions
 #
 # ---------------------------------
 
@@ -13,7 +13,7 @@ from . import RNN
 
 
 # performs basic test with a model
-def testmodel(model, test_files, gpuID):
+def check_model(model, test_files, gpuID):
 
     xp = cuda.cupy if gpuID >= 0 else np
 

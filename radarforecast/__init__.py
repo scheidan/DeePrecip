@@ -10,4 +10,4 @@ from .RNN import (ConvLTSMSpatialTransformerDeconv, count_parameters, move_state
 # from .blur import (Gaussian_blur)
 # from .SpatialTransformer import (LearnableTargetGrid, interpolate, expand_grid)
 from .traininfo import training
-from .runtest import testmodel
+from .modelchecks import check_model

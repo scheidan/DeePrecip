@@ -2,7 +2,7 @@
 # Run convolutional LSTM
 #
 # ---------------------------------
-from __future__ import print_function
+
 
 import os
 import sys
@@ -128,7 +128,7 @@ nstep_plot = 24*1  # length of validation plot
 ## -----------
 ## tests
 
-forecast.testmodel(model, test_files, gpuID=gpuID)
+forecast.check_model(model, test_files, gpuID=gpuID)
 
 
 ## -----------
