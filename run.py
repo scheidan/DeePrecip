@@ -3,7 +3,6 @@
 #
 # ---------------------------------
 
-
 import os
 import sys
 
@@ -30,15 +29,15 @@ import dataimport as g              # data generators
 
 
 load_model = True
-train = False
-plot = False
+train = True
+plot = True
 
 gpuID = 0         # -1 = CPU, 0 = GPU
 
 modelname = "CH_test"
 dim_in = (220, 360)
 
-snapshot = 4     # epochs between snapshots
+snapshot = 10     # epochs between snapshots
 verbose = 1       # every 'verbose' epoch output is printed
 
 # -----------
@@ -78,17 +77,17 @@ print("The model has {} parameters ({} mb)".format(forecast.count_parameters(mod
 data_path = "/home/scheidan/Dropbox/Projects/Nowcasting/MeteoSwissRadar/MeteoSwissRadarHDF5/CH_360x220/"
 
 train_files = ["ch_360x220_2014.02.hdf5",
-               "ch_360x220_2014.03.hdf5",
-               "ch_360x220_2014.04.hdf5",
-               "ch_360x220_2014.05.hdf5",
-               "ch_360x220_2014.06.hdf5",
-               "ch_360x220_2014.07.hdf5",
-               "ch_360x220_2014.08.hdf5",
-               "ch_360x220_2014.09.hdf5",
-               "ch_360x220_2014.10.hdf5",
-               "ch_360x220_2014.11.hdf5",
-               "ch_360x220_2014.12.hdf5",
-               "ch_360x220_2015.01.hdf5",
+               # "ch_360x220_2014.03.hdf5",
+               # "ch_360x220_2014.04.hdf5",
+               # "ch_360x220_2014.05.hdf5",
+               # "ch_360x220_2014.06.hdf5",
+               # "ch_360x220_2014.07.hdf5",
+               # "ch_360x220_2014.08.hdf5",
+               # "ch_360x220_2014.09.hdf5",
+               # "ch_360x220_2014.10.hdf5",
+               # "ch_360x220_2014.11.hdf5",
+               # "ch_360x220_2014.12.hdf5",
+               # "ch_360x220_2015.01.hdf5",
 ]
 
 test_files = ["ch_360x220_2015.02.hdf5"]
@@ -277,7 +276,7 @@ if plot:
                                               batch_size=nstep_plot+nstep_ahead))
 
     x = xp.asarray(X_plot[:, np.newaxis, np.newaxis], dtype=np.float32)
-    pp = model.predict_n_steps_online_series(state, x, nstep_ahead=nstep_ahead)
+    pp = model.predict_n_steps_series(state, x, nstep_ahead=nstep_ahead)
 
 
     # --- correction
