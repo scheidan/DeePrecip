@@ -35,9 +35,10 @@ class RNN(Chain):
         self.training = ti.training()
 
     def predict_n_steps(self, state, x_last, nstep_ahead, train=False):
-        """Predict nstep_ahead given the state and last observation.
-    Return value has shape (nstep_ahead, xdim, ydim)"""
-        x = x_last
+        """Predict nstep_ahead given the state and last observed image.
+        shape(x_last) = (ydim, xdim)
+        Return shape: (nstep_ahead, ydim, xdim)"""
+        x = x_last[xp.newaxis, xp.newaxis,:,:]
         x_pred = []
         for p in range(nstep_ahead):
             state = self.forward_one_step(state, x, train=train)
@@ -49,8 +50,11 @@ class RNN(Chain):
 
     # prediction with online parameter updating
     def predict_n_steps_updating(self, state, x_last, x_new, nstep_ahead, online_optimizer):
-        """Predict n steps ahead but first updating all parameter to minimize the loss
-    between 'x_last' and 'x_last_pred' (the previous prediction for x_last)."""
+        """Predict n steps ahead but updates first all parameter to minimize the loss
+        between 'x_last' and 'x_last_pred' (the previous prediction for x_last).
+
+        shape(x_last) = shape(x_new) = (ydim, xdim)
+        Return shape: (nstep_ahead, ydim, xdim)"""
 
         # compute loss for next time step
         x_batch = xp.asarray(xp.stack((x_last, x_new)), dtype=np.float32)
@@ -69,12 +73,14 @@ class RNN(Chain):
         state = self.update_state(state, x_batch[xp.newaxis,1,:,:])
 
         # make prediction
-        x_pred = self.predict_n_steps(state, x_batch[xp.newaxis, xp.newaxis,1,:,:], nstep_ahead)
+        x_pred = self.predict_n_steps(state, x_batch[1,:,:], nstep_ahead)
 
         return x_pred
 
 
     def update_state(self, state, x_data, train=False):
+        """Returns the updated state.
+        shape(x_data) = (N, ydim, xdim)"""
         for t in range(0, x_data.shape[0]):
             x_last = x_data[t, np.newaxis, np.newaxis]
             state = self.forward_one_step(state, x_last, train=train)
@@ -83,13 +89,15 @@ class RNN(Chain):
 
 
     def predict_n_steps_series(self, state, x_data, nstep_ahead, train=False, return_state=False):
-        """ Makes a series of nstep_ahead predictions (without parameter updating)
-        shape(x_pred) = (N, nstep_ahead, xdim, ydim)"""
+        """ Makes a series of nstep_ahead predictions (without parameter updating).
+
+        shape(x_data) = (N, ydim, xdim)
+        return shape: (N, nstep_ahead, ydim, xdim)"""
         x_pred = []
         for t in range(0, x_data.shape[0]):
-            xpr = self.predict_n_steps(state, x_data[t,:], nstep_ahead, train=train)
+            xpr = self.predict_n_steps(state, x_data[t,:,:], nstep_ahead, train=train)
             x_pred.append(xpr[:, xp.newaxis])
-            state = self.update_state(state, x_data[t,0,:], train=train)
+            state = self.update_state(state, x_data[xp.newaxis,t,:,:], train=train)
 
         if return_state:
             return (xp.swapaxes(xp.hstack(x_pred), 0, 1), state)
@@ -101,14 +109,16 @@ class RNN(Chain):
                                         online_optimizer,
                                         train=False, return_state=False):
         """ Makes a series of nstep_ahead predictions with parameter updating.
-        shape(x_pred) = (N-1, nstep_ahead, xdim, ydim)"""
+
+        shape(x_data) = (N, ydim, xdim)
+        Return shape: (N-1, nstep_ahead, xdim, ydim)"""
         x_pred = []
         for t in range(1, x_data.shape[0]):
-            xpr = self.predict_n_steps_updating(state, x_last=x_data[t-1,0,0,:], x_new=x_data[t,0,0,:],
+            xpr = self.predict_n_steps_updating(state, x_last=x_data[t-1,:,:], x_new=x_data[t,:,:],
                                                 nstep_ahead=nstep_ahead,
                                                 online_optimizer=online_optimizer)
             x_pred.append(xpr[:, xp.newaxis])
-            state = self.update_state(state, x_data[t,0,:], train=train)
+            state = self.update_state(state, x_data[xp.newaxis,t,:,:], train=train)
 
         if return_state:
             return (xp.swapaxes(xp.hstack(x_pred), 0, 1), state)
@@ -185,7 +195,7 @@ class RNN(Chain):
         while buffer.shape[0] < lengthbuffer+1:
             data = next(gen)
             data = xp.asarray(data[:, np.newaxis, np.newaxis], dtype=np.float32)
-            pp, state = self.predict_n_steps_series(state, data,
+            pp, state = self.predict_n_steps_series(state, data[:,0,0,:,:],
                                                     nstep_ahead=pred_horizon,
                                                     return_state=True)
             pp = cuda.to_cpu(pp)
@@ -200,7 +210,7 @@ class RNN(Chain):
         while True:
             data = xp.asarray(data[:, np.newaxis, np.newaxis], dtype=np.float32)
 
-            pp, state = self.predict_n_steps_series(state, data,
+            pp, state = self.predict_n_steps_series(state, data[:,0,0,:,:],
                                                     nstep_ahead=pred_horizon,
                                                     return_state=True)
             pp = cuda.to_cpu(pp)

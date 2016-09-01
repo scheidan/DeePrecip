@@ -30,7 +30,7 @@ import dataimport as g              # data generators
 
 load_model = True
 train = False
-plot = False
+plot = True
 
 gpuID = 0         # -1 = CPU, 0 = GPU
 
@@ -112,7 +112,7 @@ clipGradHook = chainer.optimizer.GradientClipping(3.0)
 # -- define run
 
 if train:
-    model.training.add_run(optimizer=optimizer, epochs=2, batchsize=64, train_files=train_files,
+    model.training.add_run(optimizer=optimizer, epochs=1, batchsize=64, train_files=train_files,
                            test_files=test_files, gpuID=gpuID, eps_min=1.0/48.0, eps_decay=0.82)
 
     # model.training.repeat_run(epochs = 1, eps_decay=0.82, eps_min=1.0/48.0,
@@ -272,32 +272,31 @@ if plot:
     nstep_ahead = 48
     # X_plot = next(g.batch_sequence_multi_hdf5(model.training.getlast("test_files"),
     #                                           batch_size=nstep_plot+nstep_ahead))
-    X_plot = next(g.batch_sequence_multi_hdf5(test_files,
-                                              batch_size=nstep_plot+nstep_ahead))
+    X_plot = xp.asarray(next(g.batch_sequence_multi_hdf5(test_files,
+                                              batch_size=nstep_plot+nstep_ahead)),
+                        dtype=np.float32)
 
-    x = xp.asarray(X_plot[:, np.newaxis, np.newaxis], dtype=np.float32)
-    pp = model.predict_n_steps_series(state, x, nstep_ahead=nstep_ahead)
+    pp = model.predict_n_steps_series(state, X_plot, nstep_ahead=nstep_ahead)
 
 
     # --- correction
-    radarplot.correction("../Plots/{}_LocalCorrection.pdf".format(modelname), model, state,
-                         xp.asarray(X_plot, dtype=np.float32))
+    radarplot.correction("../Plots/{}_LocalCorrection.pdf".format(modelname), model, state, X_plot)
 
 
     radarplot.prediction_series("../Plots/{}_series.pdf".format(modelname),
-                                X_true=x[nstep_ahead:,0,0,:], X_pred=pp[nstep_ahead:,:],
+                                X_true=X_plot[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:,:],
                                 offset=0, zmax=50)
 
     radarplot.error("../Plots/{}_error.pdf".format(modelname),
-                          X_true=x[nstep_ahead:,0,0,:], X_pred=pp[nstep_ahead:,:])
+                          X_true=X_plot[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:])
 
 
     # radarplot.validation_map("../Plots/{}_validation.pdf".format(modelname), n_pred=[15, 30, 45, 60, 75],
-    #                          X_true=x[nstep_ahead:,0,0,:], X_pred=pp[nstep_ahead:,:], zmax=50,
+    #                          X_true=x[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:,:], zmax=50,
     #                          lon=(470000,830000), lat=(65000, 285000), CH1903=True)
 
     radarplot.validation("../Plots/{}_validation.pdf".format(modelname), n_pred=[15, 30, 45, 60, 75],
-                         X_true=x[nstep_ahead:,0,0,:], X_pred=pp[nstep_ahead:,:], zmax=50)
+                         X_true=X_plot[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:,:], zmax=50)
 
 
     # # --- data plot
@@ -333,43 +332,19 @@ online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
 x_last = X[0,:]
 x_new = X[1,:]
 
-# takes (1,1,220, 360) should take (220, 360)
-pp0 = model.predict_n_steps(state, x_last[xp.newaxis, xp.newaxis, :,:], 6)
+
+# takes (220, 360)
+pp0 = model.predict_n_steps(state, x_last, 6)
 print(pp0.shape)
 
 # takes  (220, 360),  (220, 360)
 pp1 = model.predict_n_steps_updating(state, x_last, x_new, 6, online_optimizer)
 print(pp1.shape)
 
-# takes (N, 1, 1, 220, 360) better take (N, 220, 360)
-pp2 = model.predict_n_steps_series(state, X2, 6)
+# takes (N, 220, 360)
+pp2 = model.predict_n_steps_series(state, X, 6)
 print(pp2.shape)
 
-# takes (N, 1, 1, 220, 360) better take (N, 220, 360)
-pp3 = model.predict_n_steps_series_updating(state, X2, 6, online_optimizer)
+# takes (N, 220, 360)
+pp3 = model.predict_n_steps_series_updating(state, X, 6, online_optimizer)
 print(pp3.shape)
-
-
-
-# # compute loss for next time step
-# x_batch = xp.asarray(np.stack((x_last, x_new)), dtype='float32')
-# loss, _ = model.loss_series(state, x_batch, eps=1.0)
-
-
-
-# # clipGradHook = chainer.optimizer.GradientClipping(3.0)
-
-# online_optimizer.setup(model)
-# # optimizer.add_hook(clipGradHook, name="GradClip")
-
-
-# model.zerograds()
-# loss.backward()
-# loss.unchain_backward() # delete computational 'history'
-# online_optimizer.update()
-
-# # update state
-# state = model.update_state(state, x_batch[xp.newaxis,1,:,:])
-
-# # make prediction
-# x_pred = model.predict_n_steps(state, x_batch[xp.newaxis,xp.newaxis,1,:,:], 5)

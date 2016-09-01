@@ -17,7 +17,8 @@ def check_model(model, test_files, gpuID):
 
     xp = cuda.cupy if gpuID >= 0 else np
 
-    X_tests = next(g.batch_sequence_multi_hdf5(test_files, batch_size=20))
+    X_tests = xp.asarray(next(g.batch_sequence_multi_hdf5(test_files, batch_size=20)),
+                         dtype=np.float32)
 
     s0 = model.make_initial_state()
 
@@ -26,19 +27,19 @@ def check_model(model, test_files, gpuID):
         RNN.move_state_to_gpu(s0, gpuID)
 
     # prediction
-    pp = model.predict_n_steps(s0,  xp.asarray(X_tests[1, np.newaxis, np.newaxis], dtype=np.float32),
+    pp = model.predict_n_steps(s0, X_tests[1,:,:],
                                nstep_ahead=5, train=False)
 
     assert pp.shape == (5, X_tests.shape[1], X_tests.shape[2])
 
     # state update
-    s1 = model.update_state(s0, xp.asarray(X_tests[1:10,:,:], dtype=np.float32))
+    s1 = model.update_state(s0, X_tests[1:10,:,:])
     assert np.sum(abs(s1['h2'].data)) > 0
 
     # loss
-    l1, _ = model.loss_series(s0, xp.asarray(X_tests[1:20,:,:], dtype=np.float32), train=True)
-    l2, _ = model.loss_series(s0, xp.asarray(X_tests[1:20,:,:], dtype=np.float32), burn_in=2, train=True)
-    l3, _ = model.loss_series(s0, xp.asarray(X_tests[1:20,:,:], dtype=np.float32), burn_in=10)
+    l1, _ = model.loss_series(s0, X_tests[1:20,:,:], train=True)
+    l2, _ = model.loss_series(s0, X_tests[1:20,:,:], burn_in=2, train=True)
+    l3, _ = model.loss_series(s0, X_tests[1:20,:,:], burn_in=10)
     assert l1.data > 0
     assert l2.data > 0
     # assert l2.data > l3.data
