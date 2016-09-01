@@ -167,9 +167,11 @@ class RNN(Chain):
     def block_prediction(self, state,
                          datafiles, length, pred_horizon,
                          fun=lambda x: x,
-                         batchsize=8, return_state=False):
+                         batchsize=8, optimizer=None, return_state=False):
         """Builds an array with the label image and predictions with
     different forecast horizons and applies 'fun' to it.
+
+    If the argument 'optimizer' is not None, online updating is used.
 
     Tries to minimize memory consumption, i.e. 'length' can be large.
 
@@ -181,6 +183,7 @@ class RNN(Chain):
     If return_state=False:
     return list L,
     L =  [fun(A_t) for all t=1...length]
+    (with optimizer is not None, to length-1)
 
     If return_state=True:
     return the tuple (L, state)
@@ -194,13 +197,21 @@ class RNN(Chain):
         buffer = np.empty((0, pred_horizon, self.dim_in[0], self.dim_in[1]), dtype=np.float32)
         while buffer.shape[0] < lengthbuffer+1:
             data = next(gen)
-            data = xp.asarray(data[:, np.newaxis, np.newaxis], dtype=np.float32)
-            pp, state = self.predict_n_steps_series(state, data[:,0,0,:,:],
-                                                    nstep_ahead=pred_horizon,
-                                                    return_state=True)
+            if optimizer is None:
+                data = xp.asarray(data, dtype=np.float32)
+                pp, state = self.predict_n_steps_series(state, data,
+                                                        nstep_ahead=pred_horizon,
+                                                        return_state=True)
+            else:
+                data_extended = xp.asarray(np.append(buffer[-1:,0,:,:],
+                                                     data, axis=0),
+                                        dtype=np.float32)
+                pp, state = self.predict_n_steps_series_updating(state, data_extended,
+                                                                 nstep_ahead=pred_horizon,
+                                                                 online_optimizer=optimizer,
+                                                                 return_state=True)
             pp = cuda.to_cpu(pp)
             buffer = np.append(buffer, pp, axis=0)
-
 
         buffer, data = np.split(buffer, [lengthbuffer], axis=0)
         data = data[:,0,:,:]
@@ -208,11 +219,22 @@ class RNN(Chain):
         result = []
         # loop over batches
         while True:
-            data = xp.asarray(data[:, np.newaxis, np.newaxis], dtype=np.float32)
 
-            pp, state = self.predict_n_steps_series(state, data[:,0,0,:,:],
-                                                    nstep_ahead=pred_horizon,
-                                                    return_state=True)
+            if optimizer is None:
+                data = xp.asarray(data, dtype=np.float32)
+                pp, state = self.predict_n_steps_series(state, data,
+                                                        nstep_ahead=pred_horizon,
+                                                        return_state=True)
+            else:
+                data_extended = xp.asarray(np.append(buffer[-1:,0,:,:],
+                                                     data, axis=0),
+                                        dtype=np.float32)
+                pp, state = self.predict_n_steps_series_updating(state,
+                                                                 data_extended,
+                                                                 nstep_ahead=pred_horizon,
+                                                                 online_optimizer=optimizer,
+                                                                 return_state=True)
+
             pp = cuda.to_cpu(pp)
 
             predi = np.append(buffer, pp, axis=0)
@@ -223,7 +245,8 @@ class RNN(Chain):
                 predi[:,i] = np.roll(predi[:,i], i)
 
             # apply fun
-            A =  np.append(cuda.to_cpu(data)[:,:,0,:,:], predi[lengthbuffer:,:], axis=1)
+            A =  np.append(cuda.to_cpu(data)[:,np.newaxis,:,:], predi[lengthbuffer:,:], axis=1)
+
             res = [fun(a) for a in A]
             result.extend(res)
 

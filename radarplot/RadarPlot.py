@@ -307,7 +307,7 @@ def error(pdfname, X_true, X_pred):
         plt.close()
 
 # plot RMSE for different prediction horizont
-def RMSE(pdfname, model, state, datafiles, length=24, max_pred=72):
+def RMSE(pdfname, model, state, datafiles, length=24, max_pred=72, optimizer=None):
     def MS(A):
         assert len(A.shape) == 3, "Input array A must have 3 dimensions!"
         ms = np.empty(A.shape[0]-1)
@@ -317,7 +317,7 @@ def RMSE(pdfname, model, state, datafiles, length=24, max_pred=72):
 
     ms = model.block_prediction(state=state,  datafiles=datafiles,
                                 length=length, pred_horizon=max_pred, fun=MS,
-                                batchsize=8, return_state=False)
+                                batchsize=8, optimizer=optimizer, return_state=False)
     ms = np.array(ms)
 
     RMS = np.sqrt(np.mean(ms, axis = 0))
@@ -326,7 +326,10 @@ def RMSE(pdfname, model, state, datafiles, length=24, max_pred=72):
         plt.plot(RMS)
         plt.xlabel('prediction horizon [steps]')
         plt.ylabel('RMSE')
-        plt.title('root mean squared error')
+        if optimizer is None:
+            plt.title('Root mean squared error. No updating.')
+        else:
+            plt.title('root mean squared error. With updating.')
         for e in range(0, max_pred+24, 24):
             plt.axvline(e, color="gray")
 

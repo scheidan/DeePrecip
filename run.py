@@ -264,7 +264,7 @@ if plot:
 
 
     # -- error plot
-    radarplot.learningplot("../Plots/{}_RMS.pdf".format(modelname), model)
+    radarplot.learningplot("../Plots/{}_loss.pdf".format(modelname), model)
 
 
     # -- validation
@@ -310,41 +310,13 @@ if plot:
     radarplot.convolution_filter("../Plots/{}_filter.pdf".format(modelname), model)
 
     # --- plot RMSE
-    radarplot.RMSE("../Plots/{}_RMSE2.pdf".format(modelname), model, state, test_files,
+    online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
+    radarplot.RMSE("../Plots/{}_RMSE.pdf".format(modelname), model, state, test_files,
                    length=24*10, max_pred=72)
+    radarplot.RMSE("../Plots/{}_RMSE_updating.pdf".format(modelname), model, state, test_files,
+                   length=24*10, max_pred=72, optimizer=online_optimizer)
 
     print("plots finished")
 
 
 # ============================================
-# test online prediction with updating
-
-
-X = xp.asarray(next(g.batch_sequence_multi_hdf5(test_files, 10)), dtype=np.float32)
-print(X.shape)
-X2 = X[:, np.newaxis, np.newaxis]
-print(X2.shape)
-
-# update parameters
-online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
-# online_optimizer = optimizers.RMSprop(lr=0.00001, alpha=0.99, eps=1e-08)
-
-x_last = X[0,:]
-x_new = X[1,:]
-
-
-# takes (220, 360)
-pp0 = model.predict_n_steps(state, x_last, 6)
-print(pp0.shape)
-
-# takes  (220, 360),  (220, 360)
-pp1 = model.predict_n_steps_updating(state, x_last, x_new, 6, online_optimizer)
-print(pp1.shape)
-
-# takes (N, 220, 360)
-pp2 = model.predict_n_steps_series(state, X, 6)
-print(pp2.shape)
-
-# takes (N, 220, 360)
-pp3 = model.predict_n_steps_series_updating(state, X, 6, online_optimizer)
-print(pp3.shape)
