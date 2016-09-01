@@ -26,11 +26,23 @@ def check_model(model, test_files, gpuID):
     if gpuID >= 0:
         RNN.move_state_to_gpu(s0, gpuID)
 
-    # prediction
-    pp = model.predict_n_steps(s0, X_tests[1,:,:],
-                               nstep_ahead=5, train=False)
+    # misc dimensionality checks
+    x_last = X_tests[0,:]
+    x_new = X_tests[1,:]
 
-    assert pp.shape == (5, X_tests.shape[1], X_tests.shape[2])
+    assert model.predict_n_steps(s0, x_last, 6).shape == \
+        (6, X_tests.shape[1], X_tests.shape[2])
+
+    online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
+    assert model.predict_n_steps_updating(s0, x_last, x_new, 6, online_optimizer).shape == \
+        (6, X_tests.shape[1], X_tests.shape[2])
+
+    assert model.predict_n_steps_series(s0, X_tests, 6).shape == \
+        (X_tests.shape[0], 6, X_tests.shape[1], X_tests.shape[2])
+
+    assert model.predict_n_steps_series_updating(s0, X_tests, 6, online_optimizer).shape == \
+        (X_tests.shape[0]-1, 6, X_tests.shape[1], X_tests.shape[2])
+
 
     # state update
     s1 = model.update_state(s0, X_tests[1:10,:,:])
@@ -43,5 +55,7 @@ def check_model(model, test_files, gpuID):
     assert l1.data > 0
     assert l2.data > 0
     # assert l2.data > l3.data
+
+
 
     print("All tests passed :)")
