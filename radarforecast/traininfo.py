@@ -27,7 +27,7 @@ class training(list):
         Store all information of all trainings as a list of dictionaries
 
         Keyword Arguments:
-        optimizer_* -- a chainer.optimizer object
+        optimizer   -- a chainer.optimizer object
         epochs      -- number of epochs
         batchsize   --
         train_files -- list of file names
@@ -40,6 +40,7 @@ class training(list):
         D = {}
         assert isinstance(optimizer, chainer.Optimizer)
         D["optimizer"] = str(type(optimizer))
+        D["optimizer_object"] = copy.copy(optimizer)
         D["epochs"] = epochs
         D["batchsize"] = batchsize
         D["train_files"] = train_files
