@@ -9,7 +9,7 @@ setup(
     name='deeprecip',
     version='0.1.0',
     description='Radar precipitation forcast',
-    long_description=open('README.rst').read(),
+    long_description=open('README.md').read(),
     include_package_data=True,
     packages=['radarforecast', 'radarplot', 'dataimport'],
     install_requires=['wheel', 'numpy', 'chainer>=1.14', 'matplotlib','h5py', 'dill'], # 'basemap'
