@@ -4,8 +4,9 @@ deePrecip
 Introduction
 ------------
 
-_Deprecip_ produces short term precipitation prediction based on a
-recurrent neuronal network architecture.
+_Deeprecip_ is a recurrent neuronal network with an architecture tailured to produces short term precipitation prediction. Images from weather radars serve as inputs.
+
+The network is implement in [Chainer](https://chainer.org/), a deep learning framework based on the “Define-by-Run” scheme.
 
 This is work in progress. See [this
 slides](http://www.slideshare.net/scheidan/recurrent-neuronal-network-tailored-for-weather-radar-nowcasting)
@@ -55,5 +56,4 @@ new files become available immediately. (Thanks Uwe!)
 Usage
 -----
 
-Not yet documented.
 See `run.py` for an example.

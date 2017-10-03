@@ -29,15 +29,15 @@ import dataimport as g              # data generators
 
 
 load_model = True
-train = False
+train = True
 plot = True
 
 gpuID = 0         # -1 = CPU, 0 = GPU
 
-modelname = "CH_test"
+modelname = "CH_2014"
 dim_in = (220, 360)
 
-snapshot = 10     # epochs between snapshots
+snapshot = 4     # epochs between snapshots
 verbose = 1       # every 'verbose' epoch output is printed
 
 # -----------
@@ -73,24 +73,23 @@ print("The model has {} parameters ({} mb)".format(forecast.count_parameters(mod
 
 # --- define data
 
-
 data_path = "/home/scheidan/Dropbox/Projects/Nowcasting/MeteoSwissRadar/MeteoSwissRadarHDF5/CH_360x220/"
 
 train_files = ["ch_360x220_2014.02.hdf5",
-               # "ch_360x220_2014.03.hdf5",
-               # "ch_360x220_2014.04.hdf5",
-               # "ch_360x220_2014.05.hdf5",
-               # "ch_360x220_2014.06.hdf5",
-               # "ch_360x220_2014.07.hdf5",
-               # "ch_360x220_2014.08.hdf5",
-               # "ch_360x220_2014.09.hdf5",
-               # "ch_360x220_2014.10.hdf5",
-               # "ch_360x220_2014.11.hdf5",
-               # "ch_360x220_2014.12.hdf5",
-               # "ch_360x220_2015.01.hdf5",
+               "ch_360x220_2014.03.hdf5",
+               "ch_360x220_2014.04.hdf5",
+               "ch_360x220_2014.05.hdf5",
+               "ch_360x220_2014.06.hdf5",
+               "ch_360x220_2014.07.hdf5",
+               "ch_360x220_2014.08.hdf5",
+               "ch_360x220_2014.09.hdf5",
+               "ch_360x220_2014.10.hdf5",
+               "ch_360x220_2014.11.hdf5",
+               "ch_360x220_2014.12.hdf5",
+               "ch_360x220_2015.01.hdf5",
 ]
 
-test_files = ["ch_360x220_2015.02.hdf5"]
+test_files = ["ch_360x220_2015.04.hdf5"]
 
 
 train_files = [os.path.join(data_path, f) for f in train_files]
@@ -103,7 +102,7 @@ test_files = [os.path.join(data_path, f) for f in test_files]
 #optimizer = optimizers.MomentumSGD(lr=0.00001, momentum=0.9)
 #optimizer = optimizers.Adam()
 #optimizer = optimizers.AdaDelta()
-optimizer = optimizers.RMSprop(lr=0.00001, alpha=0.99, eps=1e-08)
+optimizer = optimizers.RMSprop(lr=0.000001, alpha=0.99, eps=1e-08)
 #optimizer = optimizers.NesterovAG(lr=0.001, momentum=0.9)
 
 clipGradHook = chainer.optimizer.GradientClipping(3.0)
@@ -112,8 +111,8 @@ clipGradHook = chainer.optimizer.GradientClipping(3.0)
 # -- define run
 
 if train:
-    model.training.add_run(optimizer=optimizer, epochs=1, batchsize=64, train_files=train_files,
-                           test_files=test_files, gpuID=gpuID, eps_min=1.0/48.0, eps_decay=0.82)
+    model.training.add_run(optimizer=optimizer, epochs=30, batchsize=64, train_files=train_files,
+                           test_files=test_files, gpuID=gpuID, eps_min=1.0/48.0, eps_decay=0.86)
 
     # model.training.repeat_run(epochs = 1, eps_decay=0.82, eps_min=1.0/48.0,
     #                           train_files=train_files, test_files=test_files)
@@ -149,7 +148,7 @@ if train:
 
     loss_arr = []
 
-    print("Increase forecast horizon by {}% per epoch (max {} steps).".format(
+    print("Increase expected forecast horizon by {}% per epoch (max {} steps).".format(
         round((1/model.training.getlast("eps_decay") - 1)*100), round(1/model.training.getlast("eps_min"))))
 
     for epoch in range(model.training.getlast("epochs")):
@@ -249,6 +248,9 @@ if train:
 ## --- plots
 
 if plot:
+    print("Producing plots")
+
+    online_optimizer = optimizers.MomentumSGD(lr=0.001, momentum=0.6)
 
     # -- graph
     n_graph_steps = 3
@@ -277,6 +279,8 @@ if plot:
                         dtype=np.float32)
 
     pp = model.predict_n_steps_series(state, X_plot, nstep_ahead=nstep_ahead)
+    pp_online = model.predict_n_steps_series_updating(state, X_plot, nstep_ahead=nstep_ahead,
+                                               online_optimizer=online_optimizer)
 
 
     # --- correction
@@ -295,8 +299,12 @@ if plot:
     #                          X_true=x[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:,:], zmax=50,
     #                          lon=(470000,830000), lat=(65000, 285000), CH1903=True)
 
-    radarplot.validation("../Plots/{}_validation.pdf".format(modelname), n_pred=[15, 30, 45, 60, 75],
+    radarplot.validation("../Plots/{}_validation.pdf".format(modelname), n_pred=[5, 15, 45, 60, 75],
                          X_true=X_plot[nstep_ahead:,:,:], X_pred=pp[nstep_ahead:,:,:], zmax=50)
+
+    radarplot.validation("../Plots/{}_validation_online.pdf".format(modelname), n_pred=[5, 15, 45, 60, 75],
+                         X_true=X_plot[nstep_ahead:,:,:], X_pred=pp_online[nstep_ahead:,:,:], zmax=50)
+
 
 
     # # --- data plot
@@ -310,7 +318,6 @@ if plot:
     radarplot.convolution_filter("../Plots/{}_filter.pdf".format(modelname), model)
 
     # --- plot RMSE
-    online_optimizer = optimizers.MomentumSGD(lr=0.1, momentum=0.6)
     radarplot.RMSE("../Plots/{}_RMSE.pdf".format(modelname), model, state, test_files,
                    length=24*10, max_pred=72)
     radarplot.RMSE("../Plots/{}_RMSE_updating.pdf".format(modelname), model, state, test_files,
